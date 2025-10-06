@@ -4,6 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ship Power Grid Configurator</title>
+    <!--
+        Copyright (c) 2025 Afoekon
+
+        Permission is hereby granted, free of charge, to any person obtaining a copy
+        of this software and associated documentation files (the "Software"), to deal
+        in the Software without restriction, including without limitation the rights
+        to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+        copies of the Software, and to permit persons to whom the Software is
+        furnished to do so, subject to the following conditions:
+
+        The above copyright notice and this permission notice shall be included in all
+        copies or substantial portions of the Software.
+
+        THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+        OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+        SOFTWARE.
+    -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: 'Inter', sans-serif; }
@@ -109,9 +130,9 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
 </head>
-<body class="bg-gray-900 text-gray-200 min-h-screen">
+<body class="bg-gray-900 text-gray-200 min-h-screen flex flex-col">
 
-    <div id="app" class="container mx-auto p-4">
+    <div id="app" class="container mx-auto p-4 flex-grow">
         <header class="text-center mb-6">
             <h1 class="text-4xl font-bold text-white">Ship Power Grid Configurator</h1>
             <p class="text-gray-400">Select your ship and power sources, then place components on the grid.</p>
@@ -160,6 +181,11 @@
             </section>
         </main>
     </div>
+
+    <footer class="text-center p-4 mt-8 text-xs text-gray-500">
+        <p>Copyright (c) 2025 Afoekon. Code is licensed under the MIT License.</p>
+        <p class="mt-1">This is an unofficial fan-made tool. All component names, shapes, and game concepts are the intellectual property of the original game developers.</p>
+    </footer>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
@@ -911,4 +937,3 @@
 </body>
 </html>
 
-/* Created by Jeffrey Ragsdale with Gemini Pro 2.5*/
