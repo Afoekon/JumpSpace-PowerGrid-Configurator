@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ship Power Grid Configurator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .grid-container {
+            touch-action: none;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+        }
+        .component-plug {
+            position: absolute;
+            cursor: grab;
+            display: grid;
+        }
+        .component-block {
+            width: 85%;
+            height: 85%;
+            border-radius: 6px;
+            background-color: rgba(245, 245, 220, 0.95);
+            border: 1px solid #fde047;
+            /* Tech pattern background */
+            background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%239ca3af' fill-opacity='0.1' fill-rule='evenodd'%3E%3Cpath d='M0 0h20v1h-20V0zm10 2h10v1h-10V2zM0 4h10v1H0V4zm10 6h10v1h-10v-1zM0 12h10v1H0v-1zm0 4h10v1H0v-1z'/%3E%3C/g%3E%3C/svg%3E");
+        }
+        .component-plug.powered-fully .component-block {
+            background-color: #3b82f6; /* Darker Blue */
+            border-color: #6b7280;   /* Gray Border */
+        }
+        .component-plug.powered-partially .component-block {
+            background-color: rgba(239, 68, 68, 0.95);
+            border-color: #dc2626;
+        }
+        .dragging {
+            cursor: grabbing;
+            z-index: 50;
+            opacity: 0.7;
+        }
+        .grid-cell {
+            aspect-ratio: 1 / 1;
+            transition: background-color 0.2s;
+        }
+        .grid-cell-highlight {
+            background-color: rgba(77, 163, 255, 0.3) !important;
+            outline: 1px dashed rgba(77, 163, 255, 0.8);
+            z-index: 1;
+        }
+        .header-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #9ca3af;
+        }
+        .component-label {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translate(-50%, -110%);
+            font-size: 11px;
+            font-weight: 500;
+            color: #e5e7eb;
+            background-color: rgba(31, 41, 55, 0.8);
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .radio-label {
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+            margin-right: 1rem;
+            font-size: 0.875rem;
+            color: #d1d5db;
+        }
+        .radio-input {
+            -webkit-appearance: none;
+            appearance: none;
+            background-color: #4b5563;
+            margin: 0;
+            font: inherit;
+            color: currentColor;
+            width: 1.15em;
+            height: 1.15em;
+            border: 0.15em solid currentColor;
+            border-radius: 50%;
+            transform: translateY(-0.075em);
+            display: grid;
+            place-content: center;
+        }
+        .radio-input::before {
+            content: "";
+            width: 0.65em;
+            height: 0.65em;
+            border-radius: 50%;
+            transform: scale(0);
+            transition: 120ms transform ease-in-out;
+            box-shadow: inset 1em 1em #3b82f6;
+        }
+        .radio-input:checked::before {
+            transform: scale(1);
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-900 text-gray-200 min-h-screen">
+
+    <div id="app" class="container mx-auto p-4">
+        <header class="text-center mb-6">
+            <h1 class="text-4xl font-bold text-white">Ship Power Grid Configurator</h1>
+            <p class="text-gray-400">Select your ship and power sources, then place components on the grid.</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <section id="controls-panel" class="lg:col-span-3 bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-bold mb-4 border-b border-gray-600 pb-2">Configuration</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label for="ship-select" class="block text-sm font-medium text-gray-300 mb-1">Ship Chassis</label>
+                        <select id="ship-select" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"></select>
+                    </div>
+                    <div>
+                        <label for="reactor-select" class="block text-sm font-medium text-gray-300 mb-1">Reactor (Rows 1-4)</label>
+                        <select id="reactor-select" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"></select>
+                        <div id="reactor-mk-radios" class="mt-2 flex"></div>
+                    </div>
+                    <div>
+                        <label for="aux1-select" class="block text-sm font-medium text-gray-300 mb-1">Aux Generator 1 (Rows 5-6)</label>
+                        <select id="aux1-select" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"></select>
+                        <div id="aux1-mk-radios" class="mt-2 flex"></div>
+                    </div>
+                    <div>
+                        <label for="aux2-select" class="block text-sm font-medium text-gray-300 mb-1">Aux Generator 2 (Rows 7-8)</label>
+                        <select id="aux2-select" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"></select>
+                        <div id="aux2-mk-radios" class="mt-2 flex"></div>
+                    </div>
+                     <button id="reset-button" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-md transition duration-300">Reset Plugs</button>
+                </div>
+            </section>
+            
+            <section id="grid-section" class="lg:col-span-6 relative">
+                <div class="grid grid-cols-9">
+                    <div class="header-cell"></div>
+                    <div class="header-cell">A</div><div class="header-cell">B</div><div class="header-cell">C</div><div class="header-cell">D</div>
+                    <div class="header-cell">E</div><div class="header-cell">F</div><div class="header-cell">G</div><div class="header-cell">H</div>
+                </div>
+                <div id="grid-wrapper" class="grid grid-cols-9"></div>
+            </section>
+
+            <section id="palette-panel" class="lg:col-span-3 bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-bold mb-4 border-b border-gray-600 pb-2">Component Palette</h2>
+                <div id="palette-content" class="space-y-3"></div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const GRID_ROWS = 16;
+            const GRID_COLS = 8;
+             const COLORS = {
+                unpowered: '#374151',
+                normal: '#2ECC71',
+                protected: '#4DA3FF'
+            };
+            const appData = {
+                reactors: {
+                    'Split Reactor': {
+                        'MK I': [[1,1,0,0,0,0,1,1],[1,1,1,0,0,1,1,1],[1,1,1,0,0,1,1,1],[1,1,1,0,0,1,1,1]],
+                        'MK II':[[1,1,0,0,0,0,1,1],[1,1,1,0,0,1,1,1],[2,1,1,0,0,1,1,2],[2,1,1,0,0,1,1,2]],
+                        'MK III':[[1,1,0,0,0,0,1,1],[1,1,1,0,0,1,1,1],[2,2,1,0,0,1,2,2],[2,2,1,0,0,1,2,2]],
+                    },
+                    'Solid State Reactor': {
+                        'MK I': [[0,0,1,1,1,1,0,0],[0,0,1,1,1,1,0,0],[0,0,2,2,2,2,0,0],[0,0,2,2,2,2,0,0]],
+                        'MK II':[[0,0,1,1,1,1,0,0],[0,0,2,2,2,2,0,0],[0,0,2,2,2,2,0,0],[0,0,2,2,2,2,0,0]],
+                        'MK III':[[0,0,2,2,2,2,0,0],[0,0,2,2,2,2,0,0],[0,0,2,2,2,2,0,0],[0,0,2,2,2,2,0,0]],
+                    },
+                    'Materia Scatter Reactor': {
+                        'MK I': [[1,1,1,1,1,1,1,1],[0,1,0,1,1,0,1,0],[1,1,1,1,1,1,1,1],[2,0,2,0,0,2,0,2]],
+                        'MK II':[[1,1,1,1,1,1,1,1],[0,1,0,1,1,0,1,0],[1,2,2,1,1,2,2,1],[2,0,2,0,0,2,0,2]],
+                        'MK III':[[1,1,1,1,1,1,1,1],[0,2,0,1,1,0,2,0],[2,2,2,2,2,2,2,2],[2,0,2,0,0,2,0,2]],
+                    },
+                    'Null Wave Reactor': {
+                        'MK I': [[1,1,0,0,0,0,1,1],[1,1,1,0,0,1,1,1],[0,2,2,1,1,2,2,0],[0,0,2,1,1,2,0,0]],
+                        'MK II':[[2,1,0,0,0,0,1,2],[2,1,1,0,0,1,1,2],[0,2,2,1,1,2,2,0],[0,0,2,1,1,2,0,0]],
+                        'MK III':[[2,2,0,0,0,0,2,2],[2,2,1,0,0,1,2,2],[0,2,2,1,1,2,2,0],[0,0,2,1,1,2,0,0]],
+                    }
+                },
+                auxGenerators: {
+                    'Bio Fission Generator': {
+                        'MK I': [[0,0,1,1,1,1,0,0], [0,0,1,0,0,1,0,0]],
+                        'MK II':[[0,1,1,1,1,1,1,0], [0,2,0,0,0,0,2,0]],
+                        'MK III':[[2,1,1,1,1,1,1,2], [2,0,0,0,0,0,0,2]],
+                    },
+                    'Null Tension Generator': {
+                        'MK I': [[0,0,1,1,1,1,0,0],[0,0,1,1,1,1,0,0]],
+                        'MK II':[[0,0,1,1,1,1,0,0],[0,0,2,1,1,2,0,0]],
+                        'MK III':[[0,0,1,1,1,1,0,0],[0,0,2,2,2,2,0,0]],
+                    },
+                    'Materia Shift Generator':{
+                        'MK I':  [[0,1,1,0,0,1,1,0],[0,1,1,0,0,1,1,0]],
+                        'MK II': [[0,1,2,0,0,2,1,0],[0,2,1,0,0,1,2,0]],
+                        'MK III':[[0,1,2,0,0,2,1,0],[0,2,2,0,0,2,2,0]]
+                    }
+                },
+                components: {
+                    'Sector Scanner':{category:'Sensor',shape:[[1,1]]},
+                    'Supply Uplink Unit': {
+                        category: 'Sensor',
+                        type: 'custom',
+                        rotations: [
+                            [{r:0, c:1}, {r:0, c:2}, {r:1, c:0}, {r:1, c:1}],
+                            [{r:0, c:0}, {r:1, c:0}, {r:1, c:1}, {r:2, c:1}],
+                            [{r:0, c:1}, {r:0, c:2}, {r:1, c:0}, {r:1, c:1}],
+                            [{r:0, c:0}, {r:1, c:0}, {r:1, c:1}, {r:2, c:1}],
+                        ],
+                        bounds: [[2, 3], [3, 2], [2, 3], [3, 2]]
+                    },
+                    'Vector Targeting Module':{category:'Sensor',shape:[[1,1,1],[1,0,0]]},
+                    'Fragment Cannon MK I':{category:'Pilot Canon',shape:[[1,1,1]]},
+                    'Fragment Cannon MK II/III': {
+                        category: 'Pilot Canon',
+                        type: 'custom',
+                        rotations: [
+                            [{r:0,c:0}, {r:0,c:1}, {r:0,c:2}, {r:1,c:1}],
+                            [{r:0,c:1}, {r:1,c:0}, {r:1,c:1}, {r:2,c:1}],
+                            [{r:0,c:1}, {r:1,c:0}, {r:1,c:1}, {r:1,c:2}],
+                            [{r:0,c:0}, {r:1,c:0}, {r:1,c:1}, {r:2,c:0}]
+                        ],
+                        bounds: [ [2, 3], [3, 2], [2, 3], [3, 2] ]
+                    },
+                    'Rapid Pulse Cannon':{category:'Pilot Canon',shape:[[1,1,1],[1,1,1]]},
+                    'Disruptor Lasers MK I/II': {
+                        category: 'Pilot Canon',
+                        type: 'custom',
+                        rotations: [
+                            [{r:0,c:0}, {r:0,c:1}, {r:1,c:0}],
+                            [{r:0,c:0}, {r:0,c:1}, {r:1,c:1}],
+                            [{r:0,c:1}, {r:1,c:0}, {r:1,c:1}],
+                            [{r:0,c:0}, {r:1,c:0}, {r:1,c:1}]
+                        ],
+                        bounds: [ [2, 2], [2, 2], [2, 2], [2, 2] ]
+                    },
+                    'Disruptor Lasers MK III': { category: 'Pilot Canon', shape: [[1,1]]},
+                    'Bolt Accelerator': {
+                        category: 'Pilot Canon',
+                        type: 'custom',
+                        rotations: [
+                            [{r:0,c:1}, {r:0,c:0}, {r:0,c:2}, {r:1,c:0}, {r:1,c:2}],
+                            [{r:0,c:1}, {r:1,c:1}, {r:2,c:1}, {r:0,c:0}, {r:2,c:0}],
+                            [{r:1,c:1}, {r:1,c:0}, {r:1,c:2}, {r:0,c:0}, {r:0,c:2}],
+                            [{r:0,c:0}, {r:1,c:0}, {r:2,c:0}, {r:0,c:1}, {r:2,c:1}]
+                        ],
+                        bounds: [ [2, 3], [3, 2], [2, 3], [3, 2] ]
+                    },
+                    'Assault Turrets':{category:'Multi Turret System',shape:[[1,1,1],[1,0,0]]},
+                    'Gatling Turrets': {
+                        category: 'Multi Turret System',
+                        type: 'custom',
+                        rotations: [
+                            [{r:0,c:0}, {r:0,c:1}, {r:0,c:2}, {r:1,c:0}, {r:1,c:1}, {r:1,c:2}, {r:2,c:0}],
+                            [{r:0,c:0}, {r:0,c:1}, {r:0,c:2}, {r:1,c:1}, {r:1,c:2}, {r:2,c:1}, {r:2,c:2}],
+                            [{r:0,c:2}, {r:1,c:0}, {r:1,c:1}, {r:1,c:2}, {r:2,c:0}, {r:2,c:1}, {r:2,c:2}],
+                            [{r:0,c:0}, {r:0,c:1}, {r:1,c:0}, {r:1,c:1}, {r:2,c:0}, {r:2,c:1}, {r:2,c:2}]
+                        ],
+                        bounds: [ [3, 3], [3, 3], [3, 3], [3, 3] ]
+                    },
+                    'Mining Lasers MK I/II': {
+                        category: 'Multi Turret System',
+                        type: 'custom',
+                        rotations: [
+                            [{r:0,c:0}, {r:0,c:1}, {r:1,c:0}],
+                            [{r:0,c:0}, {r:0,c:1}, {r:1,c:1}],
+                            [{r:0,c:1}, {r:1,c:0}, {r:1,c:1}],
+                            [{r:0,c:0}, {r:1,c:0}, {r:1,c:1}]
+                        ],
+                        bounds: [ [2, 2], [2, 2], [2, 2], [2, 2] ]
+                    },
+                    'Mining Lasers MK III': {category:'Multi Turret System',shape:[[1,1]]},
+                    'Flak Launcher Turrets':{category:'Multi Turret System',shape:[[1,1,1,1],[1,0,0,1]]},
+                    'Lance Railgun':{category:'Special Weapon',shape:[[1,1,1],[1,0,1],[1,0,1]]},
+                    'Missile Launcher':{category:'Special Weapon',shape:[[1,1,1],[1,1,1],[1,1,1]]},
+                    'Burst Shield':{category:'Special Weapon',shape:[[1,1],[1,1]]},
+                    'Targeting Module':{category:'Special Weapon',shape:[[1,1]]},
+                    'Drift Phase Engine':{category:'Engine',shape:[[1,1,1]]},
+                    'Mass Ejector Engine':{category:'Engine',shape:[[1,1,1]]},
+                    'Nitro Pulse Engine':{category:'Engine',shape:[[1,1,1,1]]},
+                    'Microplasma Engine':{category:'Engine',shape:[[1]]},
+                    'Jump Drive': {
+                        category: 'Jump Drive',
+                        type: 'custom',
+                        rotations: [
+                            [{r:0,c:0}, {r:0,c:1}, {r:1,c:0}],
+                            [{r:0,c:0}, {r:0,c:1}, {r:1,c:1}],
+                            [{r:0,c:1}, {r:1,c:0}, {r:1,c:1}],
+                            [{r:0,c:0}, {r:1,c:0}, {r:1,c:1}]
+                        ],
+                        bounds: [ [2, 2], [2, 2], [2, 2], [2, 2] ]
+                    },
+                },
+                ships: {
+                    'C-300 Catamaran':{'Sensor':1,'Pilot Canon':1,'Multi Turret System':1,'Special Weapon':2,'Engine':1, 'Jump Drive': 1},
+                    'DT-4 Dart':{'Sensor':1,'Pilot Canon':2,'Multi Turret System':0,'Special Weapon':1,'Engine':1, 'Jump Drive': 1}
+                }
+            };
+
+            let state = {
+                selectedShip:'C-300 Catamaran',
+                selectedReactor:'Split Reactor', selectedReactorMK: 'MK I',
+                selectedAux1:'Bio Fission Generator', selectedAux1MK: 'MK I',
+                selectedAux2:'Bio Fission Generator', selectedAux2MK: 'MK I',
+                powerGrid:[], placedPlugs:[], plugCounter:0, activeSelection: null 
+            };
+
+            const gridWrapper = document.getElementById('grid-wrapper');
+            const gridSection = document.getElementById('grid-section');
+            const paletteContent = document.getElementById('palette-content');
+            const shipSelect = document.getElementById('ship-select');
+            const reactorSelect = document.getElementById('reactor-select');
+            const aux1Select = document.getElementById('aux1-select');
+            const aux2Select = document.getElementById('aux2-select');
+            const resetButton = document.getElementById('reset-button');
+            
+            function init() {
+                try {
+                    populateDropdown(shipSelect, Object.keys(appData.ships));
+                    populateDropdown(reactorSelect, Object.keys(appData.reactors));
+                    populateDropdown(aux1Select, Object.keys(appData.auxGenerators));
+                    populateDropdown(aux2Select, Object.keys(appData.auxGenerators));
+                    createMkRadios(document.getElementById('reactor-mk-radios'), 'reactor-mk');
+                    createMkRadios(document.getElementById('aux1-mk-radios'), 'aux1-mk');
+                    createMkRadios(document.getElementById('aux2-mk-radios'), 'aux2-mk');
+                    
+                    createGrid();
+                    updateStateFromUI();
+                    updatePowerGrid();
+                    renderPalette();
+                    addEventListeners();
+                } catch (error) {
+                    console.error("Initialization failed:", error);
+                    document.body.innerHTML = `<div class="text-red-500 p-8">Application failed to load. Check console for details.</div>`;
+                }
+            }
+
+            function addEventListeners() {
+                shipSelect.addEventListener('change', handleShipChange);
+                reactorSelect.addEventListener('change', handlePowerSourceChange);
+                aux1Select.addEventListener('change', handlePowerSourceChange);
+                aux2Select.addEventListener('change', handlePowerSourceChange);
+                
+                document.querySelectorAll('input[name="reactor-mk"]').forEach(radio => radio.addEventListener('change', handlePowerSourceChange));
+                document.querySelectorAll('input[name="aux1-mk"]').forEach(radio => radio.addEventListener('change', handlePowerSourceChange));
+                document.querySelectorAll('input[name="aux2-mk"]').forEach(radio => radio.addEventListener('change', handlePowerSourceChange));
+
+                resetButton.addEventListener('click', resetAllPlugs);
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        cancelActiveSelection();
+                    }
+                });
+            }
+
+            function createGrid() {
+                gridWrapper.innerHTML = '';
+                state.powerGrid = Array(GRID_ROWS).fill(0).map(() => Array(GRID_COLS).fill(0));
+                for (let r = 0; r < GRID_ROWS; r++) {
+                    const header = document.createElement('div');
+                    header.className = 'header-cell';
+                    header.textContent = r + 1;
+                    gridWrapper.appendChild(header);
+                    for (let c = 0; c < GRID_COLS; c++) {
+                        const cell = document.createElement('div');
+                        cell.id = `cell-${r}-${c}`;
+                        cell.className = 'grid-cell border';
+                        cell.style.borderColor = '#4B5563'; 
+                        cell.style.backgroundColor = COLORS.unpowered;
+                        gridWrapper.appendChild(cell);
+                    }
+                }
+                gridWrapper.style.gridTemplateColumns = `30px repeat(${GRID_COLS}, 1fr)`;
+            }
+
+             function createMkRadios(container, name) {
+                ['MK I', 'MK II', 'MK III'].forEach((mk, index) => {
+                    const label = document.createElement('label');
+                    label.className = 'radio-label';
+                    const input = document.createElement('input');
+                    input.type = 'radio';
+                    input.name = name;
+                    input.value = mk;
+                    input.className = 'radio-input';
+                    if (index === 0) input.checked = true;
+                    const text = document.createElement('span');
+                    text.textContent = mk;
+                    text.className = 'ml-2';
+                    label.appendChild(input);
+                    label.appendChild(text);
+                    container.appendChild(label);
+                });
+            }
+
+            function populateDropdown(selectElement, options) {
+                options.forEach(option => {
+                    const opt = document.createElement('option');
+                    opt.value = option; opt.textContent = option;
+                    selectElement.appendChild(opt);
+                });
+            }
+
+            function updateStateFromUI() {
+                state.selectedShip = shipSelect.value;
+                state.selectedReactor = reactorSelect.value;
+                state.selectedAux1 = aux1Select.value;
+                state.selectedAux2 = aux2Select.value;
+                state.selectedReactorMK = document.querySelector('input[name="reactor-mk"]:checked')?.value || 'MK I';
+                state.selectedAux1MK = document.querySelector('input[name="aux1-mk"]:checked')?.value || 'MK I';
+                state.selectedAux2MK = document.querySelector('input[name="aux2-mk"]:checked')?.value || 'MK I';
+            }
+
+            function validateAndRemovePlugs() {
+                const newShipLoadout = appData.ships[state.selectedShip];
+                const plugsToRemove = [];
+                const categoryCounts = {};
+
+                [...state.placedPlugs].reverse().forEach(plug => {
+                    const category = appData.components[plug.name].category;
+                    categoryCounts[category] = (categoryCounts[category] || 0) + 1;
+                    const limit = newShipLoadout[category] === undefined ? 99 : newShipLoadout[category];
+                    if (categoryCounts[category] > limit) {
+                        plugsToRemove.push(plug.id);
+                    }
+                });
+
+                if (plugsToRemove.length > 0) {
+                    plugsToRemove.forEach(plugId => {
+                        document.getElementById(plugId)?.remove();
+                    });
+                    state.placedPlugs = state.placedPlugs.filter(plug => !plugsToRemove.includes(plug.id));
+                }
+            }
+            
+            function handleShipChange() {
+                cancelActiveSelection();
+                updateStateFromUI();
+                validateAndRemovePlugs();
+                renderPalette();
+            }
+
+            function getCellColor(powerValue) {
+                if (powerValue === 1) return COLORS.normal;
+                if (powerValue === 2) return COLORS.protected;
+                return COLORS.unpowered;
+            }
+
+            function handlePowerSourceChange() {
+                updateStateFromUI();
+                updatePowerGrid();
+                state.placedPlugs.forEach(checkPlugPower);
+            }
+
+            function updatePowerGrid() {
+                const reactorData = appData.reactors[state.selectedReactor] || {};
+                const reactorLayout = reactorData[state.selectedReactorMK] || reactorData['MK I'] || [];
+
+                const aux1Data = appData.auxGenerators[state.selectedAux1] || {};
+                const aux1Layout = aux1Data[state.selectedAux1MK] || aux1Data['MK I'] || [];
+
+                const aux2Data = appData.auxGenerators[state.selectedAux2] || {};
+                const aux2Layout = aux2Data[state.selectedAux2MK] || aux2Data['MK I'] || [];
+
+                for (let r = 0; r < GRID_ROWS; r++) {
+                    for (let c = 0; c < GRID_COLS; c++) {
+                        let powerValue = 0;
+                        if (r < 4) {
+                            powerValue = (reactorLayout[r] && typeof reactorLayout[r][c] !== 'undefined') ? reactorLayout[r][c] : 0;
+                        } else if (r < 6) {
+                            const auxR = r - 4;
+                            powerValue = (aux1Layout[auxR] && typeof aux1Layout[auxR][c] !== 'undefined') ? aux1Layout[auxR][c] : 0;
+                        } else if (r < 8) {
+                            const auxR = r - 6;
+                            powerValue = (aux2Layout[auxR] && typeof aux2Layout[auxR][c] !== 'undefined') ? aux2Layout[auxR][c] : 0;
+                        }
+                        
+                        if (state.powerGrid[r]) {
+                             state.powerGrid[r][c] = powerValue;
+                        }
+
+                        const cell = document.getElementById(`cell-${r}-${c}`);
+                        if (cell) {
+                            cell.style.backgroundColor = getCellColor(powerValue);
+                        }
+                    }
+                }
+            }
+            
+            function getPlacedComponentCounts() {
+                const counts = {};
+                state.placedPlugs.forEach(plug => {
+                    const category = appData.components[plug.name].category;
+                    counts[category] = (counts[category] || 0) + 1;
+                });
+                return counts;
+            }
+
+            function renderPalette() {
+                paletteContent.innerHTML = '';
+                const shipLoadout = appData.ships[state.selectedShip];
+                const placedCounts = getPlacedComponentCounts();
+                const categoriesInShip = Object.keys(shipLoadout);
+                const allCategories = [...new Set(Object.values(appData.components).map(c => c.category))];
+
+                allCategories.sort().forEach(category => {
+                     if (!categoriesInShip.includes(category)) return;
+
+                    const limit = shipLoadout[category];
+                    if (limit === 0) return;
+
+                    let reserved = 0;
+                    if (state.activeSelection && appData.components[state.activeSelection.plug.name].category === category) {
+                        reserved = 1;
+                    }
+                    const placed = placedCounts[category] || 0;
+                    const totalUsed = placed + reserved;
+
+                    const categoryDiv = document.createElement('div');
+                    categoryDiv.className = "border border-gray-700 p-3 rounded-md";
+                    
+                    const headerDiv = document.createElement('div');
+                    headerDiv.className = "flex justify-between items-center mb-2";
+
+                    const header = document.createElement('h3');
+                    header.className = "text-lg font-semibold text-white";
+                    header.textContent = `${category} (${totalUsed}/${limit})`;
+                    headerDiv.appendChild(header);
+
+                    if (placed > 0) {
+                        const categoryResetButton = document.createElement('button');
+                        categoryResetButton.textContent = 'Reset';
+                        categoryResetButton.className = 'text-xs bg-gray-600 hover:bg-gray-700 text-gray-200 font-semibold py-1 px-2 rounded-md transition-colors';
+                        categoryResetButton.onclick = () => resetCategoryPlugs(category);
+                        headerDiv.appendChild(categoryResetButton);
+                    }
+
+                    categoryDiv.appendChild(headerDiv);
+
+                    const componentsInCategory = Object.keys(appData.components).filter(name => appData.components[name].category === category);
+                    
+                    componentsInCategory.forEach(compName => {
+                        const canCreate = totalUsed < limit;
+                        const button = document.createElement('button');
+                        button.textContent = `Create ${compName}`;
+                        button.className = `w-full text-sm py-1 px-2 mt-1 rounded-md transition duration-200 ${canCreate ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-gray-600 text-gray-400 cursor-not-allowed'}`;
+                        button.disabled = !canCreate;
+                        button.onclick = (e) => createPlug(compName, e);
+                        categoryDiv.appendChild(button);
+                    });
+                    paletteContent.appendChild(categoryDiv);
+                });
+            }
+
+            function cancelActiveSelection() {
+                if (state.activeSelection) {
+                    state.activeSelection.element.remove();
+                    state.activeSelection = null;
+                    renderPalette();
+                }
+            }
+
+            function createPlug(name, clickEvent) {
+                cancelActiveSelection(); 
+
+                const component = appData.components[name];
+                state.plugCounter++;
+                const newPlug = {
+                    id: `plug-${state.plugCounter}`, name: name,
+                    top: -1, left: -1, isPowered: false, isPlaced: false
+                };
+                
+                if (component.type === 'custom') {
+                    newPlug.type = 'custom';
+                    newPlug.rotations = component.rotations;
+                    newPlug.bounds = component.bounds;
+                    newPlug.currentRotation = 0;
+                } else {
+                    newPlug.shape = JSON.parse(JSON.stringify(component.shape));
+                }
+
+                const plugEl = document.createElement('div');
+                plugEl.id = newPlug.id;
+                plugEl.className = 'component-plug';
+                plugEl.style.left = '-9999px'; 
+                plugEl.style.top = '-9999px';
+                
+                state.activeSelection = { plug: newPlug, element: plugEl };
+
+                renderPlugShape(plugEl, newPlug);
+                gridSection.appendChild(plugEl);
+                makeDraggable(plugEl, newPlug, clickEvent);
+                renderPalette();
+            }
+
+            function getOccupiedCells(plug, gridRow, gridCol) {
+                const cells = [];
+                if (plug.type === 'custom') {
+                    const offsets = plug.rotations[plug.currentRotation];
+                    for (const offset of offsets) {
+                        cells.push({ r: gridRow + offset.r, c: gridCol + offset.c });
+                    }
+                } else {
+                    for (let r = 0; r < plug.shape.length; r++) {
+                        for (let c = 0; c < plug.shape[0].length; c++) {
+                            if (plug.shape[r][c] === 1) {
+                                cells.push({ r: gridRow + r, c: gridCol + c });
+                            }
+                        }
+                    }
+                }
+                return cells;
+            }
+
+            function renderPlugShape(plugEl, plug) {
+                const headerColWidth = 30;
+                const gridPlayAreaWidth = gridWrapper.clientWidth - headerColWidth;
+                const cellWidth = gridPlayAreaWidth / GRID_COLS;
+                const cellHeight = gridWrapper.clientHeight / GRID_ROWS;
+                
+                plugEl.innerHTML = '';
+                const labelEl = document.createElement('div');
+                labelEl.className = 'component-label';
+                labelEl.textContent = plug.name;
+                plugEl.appendChild(labelEl);
+                
+                if (plug.type === 'custom') {
+                    const bounds = plug.bounds[plug.currentRotation % plug.bounds.length];
+                    const rows = bounds[0];
+                    const cols = bounds[1];
+                    const offsets = plug.rotations[plug.currentRotation % plug.rotations.length];
+                    
+                    plugEl.style.width = `${cols * cellWidth}px`;
+                    plugEl.style.height = `${rows * cellHeight}px`;
+                    plugEl.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+                    plugEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+                    const cellsToFill = new Set(offsets.map(o => `${o.r},${o.c}`));
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            const cellContainer = document.createElement('div');
+                            cellContainer.className = 'w-full h-full flex items-center justify-center';
+                            if (cellsToFill.has(`${r},${c}`)) {
+                                const block = document.createElement('div');
+                                block.className = 'component-block';
+                                cellContainer.appendChild(block);
+                            }
+                            plugEl.appendChild(cellContainer);
+                        }
+                    }
+                } else {
+                    const shape = plug.shape;
+                    const rows = shape.length;
+                    const cols = shape[0].length;
+                    plugEl.style.width = `${cols * cellWidth}px`;
+                    plugEl.style.height = `${rows * cellHeight}px`;
+                    plugEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            const cellContainer = document.createElement('div');
+                            cellContainer.className = 'w-full h-full flex items-center justify-center';
+                            if (shape[r][c] === 1) {
+                                const block = document.createElement('div');
+                                block.className = 'component-block';
+                                cellContainer.appendChild(block);
+                            }
+                            plugEl.appendChild(cellContainer);
+                        }
+                    }
+                }
+            }
+            
+            function rotatePlug(plug) {
+                if (plug.type === 'custom') {
+                    plug.currentRotation = (plug.currentRotation + 1) % plug.rotations.length;
+                } else {
+                    const shape = plug.shape;
+                    const newShape = Array(shape[0].length).fill(0).map(() => Array(shape.length).fill(0));
+                    for(let r = 0; r < shape.length; r++) {
+                        for(let c = 0; c < shape[0].length; c++) {
+                            newShape[c][shape.length - 1 - r] = shape[r][c];
+                        }
+                    }
+                    plug.shape = newShape;
+                }
+                const plugEl = document.getElementById(plug.id);
+                renderPlugShape(plugEl, plug);
+                if(plug.isPlaced) checkPlugPower(plug);
+            }
+
+            function makeDraggable(element, plug, initialEvent) {
+                let isDragging = false, grabbedOffset = { r: 0, c: 0 };
+
+                const onMouseDown = (e) => {
+                    try {
+                        if (e.button === 2) { e.preventDefault(); rotatePlug(plug); return; }
+                        if (e.button !== 0) return;
+                        e.preventDefault();
+                        isDragging = true;
+                        element.classList.add('dragging');
+
+                        if (plug.isPlaced) {
+                            const headerColWidth = 30;
+                            const gridPlayAreaWidth = gridWrapper.clientWidth - headerColWidth;
+                            const cellWidth = gridPlayAreaWidth / GRID_COLS;
+                            const plugRect = element.getBoundingClientRect();
+                            const grabX = e.clientX - plugRect.left;
+                            const grabY = e.clientY - plugRect.top;
+                            grabbedOffset.c = Math.floor(grabX / cellWidth);
+                            grabbedOffset.r = Math.floor(grabY / cellWidth);
+                        } else {
+                            grabbedOffset = { r: 0, c: 0 };
+                        }
+
+                        document.addEventListener('mousemove', onMouseMove);
+                        document.addEventListener('mouseup', onMouseUp, { once: true });
+                         if (!plug.isPlaced) {
+                             const moveEvent = new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: e.clientX, clientY: e.clientY });
+                             document.dispatchEvent(moveEvent);
+                         }
+                    } catch (error) { console.error("Drag start error:", error); isDragging = false; }
+                };
+                
+                element.addEventListener('contextmenu', e => e.preventDefault());
+
+                const onMouseMove = (e) => {
+                    try {
+                        if (!isDragging) return;
+                        const parentRect = gridSection.getBoundingClientRect();
+                        const headerColWidth = 30;
+                        const gridPlayAreaWidth = gridWrapper.clientWidth - headerColWidth;
+                        const cellWidth = gridPlayAreaWidth / GRID_COLS;
+                        const cellHeight = gridWrapper.clientHeight / GRID_ROWS;
+                        
+                        const newLeft = e.clientX - parentRect.left - (grabbedOffset.c * cellWidth) - (cellWidth / 2);
+                        const newTop = e.clientY - parentRect.top - (grabbedOffset.r * cellHeight) - (cellHeight / 2);
+                        element.style.left = `${newLeft}px`;
+                        element.style.top = `${newTop}px`;
+
+                        const gridRect = gridWrapper.getBoundingClientRect();
+                        const relativeX = e.clientX - gridRect.left - headerColWidth;
+                        const relativeY = e.clientY - gridRect.top;
+                        
+                        let targetCol = Math.floor(relativeX / cellWidth) - grabbedOffset.c;
+                        let targetRow = Math.floor(relativeY / cellHeight) - grabbedOffset.r;
+                        
+                        updateHoverHighlight(targetRow, targetCol, plug);
+
+                    } catch(error) { console.error("Drag move error:", error); }
+                };
+
+                const onMouseUp = (e) => {
+                    try {
+                        if (!isDragging) return;
+                        isDragging = false;
+                        element.classList.remove('dragging');
+                        document.removeEventListener('mousemove', onMouseMove);
+                        updateHoverHighlight(-1, -1, null);
+                        snapToGrid(element, plug, grabbedOffset);
+                    } catch(error) { console.error("Drag end error:", error); }
+                };
+                element.addEventListener('mousedown', onMouseDown);
+
+                 if (initialEvent) {
+                    const downEvent = new MouseEvent('mousedown', {
+                        bubbles: true, cancelable: true, clientX: initialEvent.clientX, clientY: initialEvent.clientY
+                    });
+                    element.dispatchEvent(downEvent);
+                }
+            }
+
+            function updateHoverHighlight(targetRow, targetCol, plug) {
+                document.querySelectorAll('.grid-cell-highlight').forEach(cell => cell.classList.remove('grid-cell-highlight'));
+                if (targetRow < 0 || targetCol < 0 || !plug) return;
+
+                const occupiedCells = getOccupiedCells(plug, targetRow, targetCol);
+
+                for (const cellPos of occupiedCells) {
+                     if (cellPos.r < GRID_ROWS && cellPos.c < GRID_COLS && cellPos.r >= 0 && cellPos.c >= 0) {
+                        const cell = document.getElementById(`cell-${cellPos.r}-${cellPos.c}`);
+                        if (cell) cell.classList.add('grid-cell-highlight');
+                    }
+                }
+            }
+
+            function snapToGrid(element, plug, grabbedOffset) {
+                const headerColWidth = 30;
+                const gridPlayAreaWidth = gridWrapper.clientWidth - headerColWidth;
+                const cellWidth = gridPlayAreaWidth / GRID_COLS;
+                const cellHeight = gridWrapper.clientHeight / GRID_ROWS;
+                
+                const elRect = element.getBoundingClientRect();
+                const gridRect = gridWrapper.getBoundingClientRect();
+                
+                const finalX = elRect.left + (grabbedOffset.c * cellWidth) + (cellWidth/2);
+                const finalY = elRect.top + (grabbedOffset.r * cellHeight) + (cellHeight/2);
+                
+                let anchorCol = Math.floor((finalX - gridRect.left - headerColWidth) / cellWidth);
+                let anchorRow = Math.floor((finalY - gridRect.top) / cellHeight);
+
+                let row = anchorRow - grabbedOffset.r;
+                let col = anchorCol - grabbedOffset.c;
+
+                let isOutOfBounds = false;
+                const occupiedCells = getOccupiedCells(plug, row, col);
+                for (const cellPos of occupiedCells) {
+                    if (cellPos.r < 0 || cellPos.r >= GRID_ROWS || cellPos.c < 0 || cellPos.c >= GRID_COLS) {
+                        isOutOfBounds = true;
+                        break;
+                    }
+                }
+                
+                const collision = isCollision(plug, row, col);
+
+                if (isOutOfBounds || collision) {
+                    if(!plug.isPlaced) { 
+                        cancelActiveSelection();
+                     } 
+                    else {
+                        element.style.left = `${gridWrapper.offsetLeft + headerColWidth + plug.left * cellWidth}px`;
+                        element.style.top = `${gridWrapper.offsetTop + plug.top * cellHeight}px`;
+                    }
+                } else {
+                    if (!plug.isPlaced) {
+                        state.placedPlugs.push(plug);
+                        plug.isPlaced = true;
+                        state.activeSelection = null;
+                    }
+                    plug.left = col; plug.top = row;
+                    element.style.left = `${gridWrapper.offsetLeft + headerColWidth + col * cellWidth}px`;
+                    element.style.top = `${gridWrapper.offsetTop + row * cellHeight}px`;
+                    checkPlugPower(plug);
+                }
+                renderPalette();
+            }
+
+            function isCollision(targetPlug, newRow, newCol) {
+                const targetCells = getOccupiedCells(targetPlug, newRow, newCol);
+                const targetCellSet = new Set(targetCells.map(c => `${c.r},${c.c}`));
+
+                for (const placed of state.placedPlugs) {
+                    if (placed.id === targetPlug.id) continue;
+                    const placedCells = getOccupiedCells(placed, placed.top, placed.left);
+                    for (const pCell of placedCells) {
+                        if (targetCellSet.has(`${pCell.r},${pCell.c}`)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            function checkPlugPower(plug) {
+                if (!plug.isPlaced) return;
+                let poweredCells = 0;
+
+                const occupiedCells = getOccupiedCells(plug, plug.top, plug.left);
+                const requiredCells = occupiedCells.length;
+
+                for(const cellPos of occupiedCells) {
+                     if (cellPos.r < GRID_ROWS && cellPos.c < GRID_COLS && state.powerGrid[cellPos.r][cellPos.c] > 0) {
+                        poweredCells++;
+                    }
+                }
+                
+                const plugEl = document.getElementById(plug.id);
+                if(!plugEl) return;
+                plugEl.classList.remove('powered-fully', 'powered-partially');
+                if (requiredCells > 0 && poweredCells === requiredCells) {
+                    plug.isPowered = true; plugEl.classList.add('powered-fully');
+                } else if (poweredCells > 0) {
+                    plug.isPowered = false; plugEl.classList.add('powered-partially');
+                } else { plug.isPowered = false; }
+            }
+            
+            function resetAllPlugs() {
+                cancelActiveSelection();
+                state.placedPlugs.forEach(plug => { document.getElementById(plug.id)?.remove(); });
+                state.placedPlugs = [];
+                renderPalette();
+            }
+
+            function resetCategoryPlugs(category) {
+                cancelActiveSelection();
+                const plugsToRemove = state.placedPlugs.filter(p => appData.components[p.name].category === category);
+                if (plugsToRemove.length === 0) return;
+
+                const idsToRemove = new Set(plugsToRemove.map(p => p.id));
+                plugsToRemove.forEach(p => document.getElementById(p.id)?.remove());
+                state.placedPlugs = state.placedPlugs.filter(p => !idsToRemove.has(p.id));
+                renderPalette();
+            }
+
+            init();
+        });
+    </script>
+</body>
+</html>
+
+/* Created by Jeffrey Ragsdale with Gemini Pro 2.5*/
